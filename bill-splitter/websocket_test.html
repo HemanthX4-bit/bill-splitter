@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bill Splitter -- Live Updates Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    input, button { font-size: 1rem; padding: 6px 10px; }
+    #log { background: #111; color: #0f0; padding: 12px; border-radius: 6px; height: 260px;
+           overflow-y: auto; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; }
+    #balances { background: #f4f4f4; padding: 12px; border-radius: 6px; margin-top: 12px; }
+    .status { font-weight: bold; }
+    .connected { color: green; }
+    .disconnected { color: #b00; }
+  </style>
+</head>
+<body>
+  <h2>Live Updates Test Client</h2>
+  <p>
+    Open this same file in <strong>two separate browser tabs</strong>, connect both to the
+    same group id, then create an expense via <code>/docs</code> in a third tab.
+    Both tabs here should update instantly, with no refresh.
+  </p>
+
+  <label>Group ID: <input id="groupId" type="number" value="1" style="width: 60px"></label>
+  <button id="connectBtn">Connect</button>
+  <span id="status" class="status disconnected">disconnected</span>
+
+  <h3>Event log</h3>
+  <div id="log">Not connected yet.</div>
+
+  <h3>Latest balances</h3>
+  <div id="balances">No data yet.</div>
+
+  <script>
+    let socket = null;
+
+    const logEl = document.getElementById("log");
+    const balancesEl = document.getElementById("balances");
+    const statusEl = document.getElementById("status");
+
+    function log(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      logEl.textContent += `\n[${timestamp}] ${message}`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function renderBalances(balances) {
+      if (!balances || balances.length === 0) {
+        balancesEl.textContent = "No balances yet.";
+        return;
+      }
+      balancesEl.innerHTML = balances
+        .map(b => `user ${b.user_id}: <strong>${b.net_amount >= 0 ? "+" : ""}${b.net_amount}</strong>`)
+        .join("<br>");
+    }
+
+    document.getElementById("connectBtn").addEventListener("click", () => {
+      if (socket) {
+        socket.close();
+      }
+
+      const groupId = document.getElementById("groupId").value;
+      // Change the host/port here if your server runs somewhere other than
+      // 127.0.0.1:8000
+      socket = new WebSocket(`ws://127.0.0.1:8080/ws/groups/${groupId}`);
+      socket.onopen = () => {
+        statusEl.textContent = "connected";
+        statusEl.className = "status connected";
+        log(`Connected to group ${groupId}`);
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        log("Received: " + JSON.stringify(data));
+        if (data.balances) {
+          renderBalances(data.balances);
+        }
+      };
+
+      socket.onclose = () => {
+        statusEl.textContent = "disconnected";
+        statusEl.className = "status disconnected";
+        log("Disconnected");
+      };
+
+      socket.onerror = (err) => {
+        log("Error -- check the browser console, and make sure the server is running");
+      };
+    });
+  </script>
+</body>
+</html>
